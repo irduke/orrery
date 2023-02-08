@@ -1,0 +1,188 @@
+con
+
+  _clkfreq = 300_000_000      'System clock set at 300 MHz
+
+  MOCCW = 0       'Moon Orbit Counter Clockwise PWM signal
+  MOCW = 1        'Moon Orbit Clockwise PWM signal
+  ERCCW = 2       'Earth Rotation Counter Clockwise PWM signal
+  ERCW = 3        'Earth Rotation Clockwise PWM signal
+  MEncoder = 4    'Moon Encoder input (uses pin 5 as well)
+  EREncoder = 6   'Earth Rotation Encoder input (uses pin 7 as well)
+  CT = 8          'Cinematic Mode toggle button
+  Home = 9        'Find Home button
+
+  p_gain = 10
+
+var
+
+  long targetM, targetER, targetE, targetC, positionM, positionER, positionE, positionC, cinematic, Stack1[100], Stack2[100], Stack3[100], Stack4[100], Stack5[100], Stack6[100], Stack7[100]
+  long FromStop
+pub Main()
+
+  debug(`term term1 size 10 4 textsize 42 color blue)                           'Set up a debug terminal window for Moon Orbit Position
+  debug(`term term2 pos 400 0 size 10 4 textsize 42 color red)                  'Set up a debug terminal window for Earth Rotation Position
+  debug(`term term3 pos 0 400 size 10 4 textsize 42 color green)                'Set up a debug terminal window for Earth Orbit Position
+  debug(`term term4 pos 0 800 size 10 4 textsize 42 color yellow)               'Set up a debug terminal window for Earth Orbit Correction
+
+  cinematic:=true     'Set cinematic mode to initially be true
+
+  cogspin(2,MoonOrbitMotor(),@Stack2)      'Start the moon orbit motor
+  cogspin(3,EarthRotMotor(),@Stack3)       'Start the earth rotation motor
+
+  repeat
+    debug(`term1 '`(positionM)' 10)           'Display current rotary position on the debug terminal (10 = new line)
+    debug(`term2 '`(positionER)' 10)
+
+    if ina.[CT]==1 && cinematic==true
+      cinematic:=false
+      cogspin(1,Encoder(),@Stack1)                'If cinematic mode turned off, turn encoder on
+    elseif ina.[CT]==1 && cinematic==false
+      cinematic:=true
+      cogstop(1)                                  'If cinematic mode is turned on, turn encoder off
+
+    if ina.[Home]==1
+      cogstop(3)                                  'If motors are homing, stop encoder and position loop
+      cogstop(2)
+      cogstop(1)
+      GoHome()                                    'Move motors to home position
+      waitms(3000)
+      cogspin(1,Encoder(),@Stack1)                'Restart encoder and motor position loops
+      cogspin(2,MoonOrbitMotor(),@Stack2)
+      cogspin(3,EarthRotMotor(),@Stack3)
+
+    waitms(200)
+
+PUB Encoder()
+
+  'Start quadrature encoder smartpin reader watching Pin 4 (Apin=%0000) and Pin 5 (Bpin=%0001) for Moon Orbit
+  pinstart(MEncoder, p_quadrature + %0000<<28 + %1001<<24, 0, 0)
+  'Start quadrature encoder smartpin reader watching Pin 6 (Apin=%0000) and Pin 7 (Bpin=%0001) for Earth Rotation
+  pinstart(EREncoder, p_quadrature + %0000<<28 + %1001<<24, 0, 0)
+
+  repeat
+    positionM:=rdpin(MEncoder) 'Moon                    'Read quadrature encoder's overall count that's automatically being stored in the smartpin
+                                                        'For 25D Pololu metal gearmotor, counts per revolution (CPR) of quadrature encoder = gear ratio * 48
+    positionER:=rdpin(EREncoder) 'Earth Rotation
+
+pub MoonOrbitMotor() | x
+
+  'Set upper and lower words of Xval so smartpins will output 30kHz PWM signals
+  x.word[0] := 10     'Set base period's # of clock pulses 10*3.33ns=33ns
+  x.word[1] := 1000   'Set PMW frame period to be made up of 1000 base periods
+
+  pinstart(MOCW, p_oe+p_pwm_sawtooth, x, 0)     'Start PWM signals
+  pinstart(MOCCW, p_oe+p_pwm_sawtooth, x, 0)
+  FromStop:=true
+
+  repeat
+    wypin(MOCW,0)
+
+    if FromStop==true
+      wypin(MOCCW,1000)
+      waitms(10)
+      FromStop:=false
+    wypin(MOCCW,220)
+
+
+    repeat while cinematic==false
+      FromStop:=true
+      wypin(MOCW,0)
+      wypin(MOCCW,0)
+      waitus(50)
+      targetM:=652
+      GoM()
+      waitms(1000)
+      targetM:=0
+      GoM()
+      waitms(1000)
+      targetM:=-652
+      GoM()
+      waitms(1000)
+
+pub GoM()
+
+  repeat 5
+    if rdpin(MEncoder)==targetM
+      return
+    elseif rdpin(MEncoder)<targetM
+      wypin(MOCW,0)
+      wypin(MOCCW,300)
+      repeat until rdpin(MEncoder)>=targetM
+        wypin(MOCCW,(50#> abs(rdpin(MEncoder)-targetM)*p_gain <#300))
+    elseif rdpin(MEncoder)>targetM
+      wypin(MOCCW,0)
+      wypin(MOCW,300)
+      repeat until rdpin(MEncoder)<=targetM
+        wypin(MOCW,(50#> abs(rdpin(MEncoder)-targetM)*p_gain <#300))
+  'Stop Motor
+  wypin(MOCW,0)
+  wypin(MOCCW,0)
+  waitus(50)
+
+pub EarthRotMotor() | x
+
+  'Set upper and lower words of Xval so smartpins will output 30kHz PWM signals
+  x.word[0] := 10     'Set base period's # of clock pulses 10*3.33ns=33ns
+  x.word[1] := 1000   'Set PMW frame period to be made up of 1000 base periods
+
+  pinstart(ERCW, p_oe+p_pwm_sawtooth, x, 0)        'Start PWM signals
+  pinstart(ERCCW, p_oe+p_pwm_sawtooth, x, 0)
+
+  repeat
+    wypin(ERCW,0)
+    wypin(ERCCW,300)
+    repeat while cinematic==false
+      wypin(ERCW,0)
+      wypin(ERCCW,0)
+      waitus(50)
+      targetER:=900
+      GoER()
+      waitms(1000)
+      targetER:=0
+      GoER()
+      waitms(1000)
+      targetER:=-900
+      GoER()
+      waitms(1000)
+
+pub GoER()
+
+  repeat 5
+    if rdpin(EREncoder)==targetER
+      return
+    elseif rdpin(EREncoder)<targetER
+      wypin(ERCW,0)
+      wypin(ERCCW,300)
+      repeat until rdpin(EREncoder)>=targetER
+        wypin(ERCCW,(50#> abs(rdpin(EREncoder)-targetER)*p_gain <#300))
+    elseif rdpin(EREncoder)>targetER
+      wypin(ERCCW,0)
+      wypin(ERCW,300)
+      repeat until rdpin(EREncoder)<=targetER
+        wypin(ERCW,(50#> abs(rdpin(EREncoder)-targetER)*p_gain <#300))
+  'Stop Motor
+  wypin(ERCW,0)
+  wypin(ERCCW,0)
+  waitus(50)
+
+pub GoHome() | x
+
+  'Set upper and lower words of Xval so smartpins will output 30kHz PWM signals
+  x.word[0] := 10     'Set base period's # of clock pulses 10*3.33ns=33ns
+  x.word[1] := 1000   'Set PMW frame period to be made up of 1000 base periods
+
+  pinstart(MOCW, p_oe+p_pwm_sawtooth, x, 0)        'Start PWM signals
+  pinstart(MOCCW, p_oe+p_pwm_sawtooth, x, 0)
+  pinstart(ERCW, p_oe+p_pwm_sawtooth, x, 0)
+  pinstart(ERCCW, p_oe+p_pwm_sawtooth, x, 0)
+
+  repeat until ina.[10]==0
+    wypin(MOCW,0)
+    wypin(MOCCW,300)
+    wypin(ERCW,0)
+    wypin(ERCCW,300)
+  'Stop Motors
+  wypin(MOCW,0)
+  wypin(MOCCW,0)
+  wypin(ERCW,0)
+  wypin(ERCCW,0)

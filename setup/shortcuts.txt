@@ -1,0 +1,13 @@
+[
+    {
+        "key": "F10",
+        "command": "workbench.action.tasks.build",
+        "args": "compileP2"
+    },
+
+    {
+        "key": "F11",
+        "command": "workbench.action.tasks.runTask",
+        "args": "downloadP2"
+    },
+]

@@ -14,60 +14,84 @@ CON
   Sin=22                      'P12 receives serial data sent from memory chip's Digital Out (DO) pin
   cs=23                       'P13 controls the Chip Select pin to activate the memory chip
 
+  DayKnobEncoder = 14
+  DayKnobButton = 13
+
 VAR
-  long DutyCycle, position, index, MemAddress, positionEO
+  long DutyCycle, position, index, MemAddress, positionEO, positionDK, targetEO, GoEarthMotor
   long Stack1[100],Stack2[100],Stack3[100],Stack4[100],Stack5[100]
   byte data[512]
 
-PUB Main() | address, i, byte_counter, day, day_input
+PUB Main() | x
 
   debug(`term console size 40 10 pos 100 100 textsize 12 color white)
   debug(`term EO size 40 10 pos 500 100 textsize 12 color white)
+  debug(`term DayKnob size 40 10 pos 900 100 textsize 12 color white)
 
   dira.[Sout]~~
   dira.[clk]~~
   dira.[Sin]~
   dira.[cs]~~
 
-  dira.[16]~~                                 'Set Pin 16 (which controls blue bar graph's right LED) to be an output
-  outa.[16]~~
-
-  'EraseChip()
-  'debug(`console 'writing to chip' 10)
-  'WriteEnable()
-  'WriteOneByte($000000, $AA)
-  'WriteDisable()
-  'day:=ReadOneByte($000000)
-  'debug(`console '`(day)' 10)
-
-
-
   debug(`console 'starting homing' 10)
   GoHome()
   debug(`console 'done homing' 10)
-  cogspin(1, Encoder(),@Stack1)
-  cogspin(2, GoEO(20000), @Stack2)
 
+  'debug(`console 'Val from cog 0: `(ReadBytes(300, 2))' 10)
+  cogspin(1, Encoders(),@Stack1)
+  cogspin(2, RunEarthMotor(), @Stack2)
   repeat
     debug(`EO '`(positionEO)' 10)
+    debug(`DayKnob '`(positionDK)' 10)
     waitms(200)
 
 
-PUB Encoder()
 
-  'Start quadrature encoder smartpin reader watching Pin 10 (Apin=%0000) and Pin 11 (Bpin=%0001) for Moon Orbit
+PUB Encoders() | revs
+
+  'Start quadrature encoder smartpin reader watching Pin 10 (Apin=%0000) and Pin 11 (Bpin=%0001) for Earth Orbit
   pinstart(EOEncoder, p_quadrature + %0000<<28 + %1001<<24, 0, 0)
+  'Start Day Knob Encoder
+  pinstart(DayKnobEncoder, p_quadrature + %0000<<28 + %0001<<24, 0, 0)
 
   repeat
-    positionEO:=rdpin(EOEncoder) 'Earth Orbit                    'Read quadrature encoder's overall count that's automatically being stored in the smartpin
-                                                     'For 25D Pololu metal gearmotor, counts per revolution (CPR) of quadrature encoder = gear ratio * 48
+    positionEO:=rdpin(EOEncoder) 'Earth Orbit For 25D Pololu metal gearmotor, counts per revolution (CPR) of quadrature encoder = gear ratio * 48
+    positionDK:=rdpin(DayKnobEncoder)/4
+    if positionDK >= 0
+      positionDK:=positionDK//366
+    else
+      revs:=1+abs(positionDK/366)
+      positionDK:=(revs*366+positionDK)//366
+    if ina.[DayKnobButton]==0
+      GoEarthMotor:=True
+      'Uncomment to make button press reset knob encoder value
+      'dira.[DayKnobEncoder]~
+      'dira.[DayKnobEncoder]~~
+    waitms(10)
+
+
+PUB RunEarthMotor() | address
+  dira.[Sout]~~
+  dira.[clk]~~
+  dira.[Sin]~
+  dira.[cs]~~
+
+  debug(`console 'Val from cog 3: `(ReadBytes(300, 2))' 10)
+  repeat
+    if GoEarthMotor
+      address:=2*positionDK
+      targetEO:=ReadBytes(address, 2)
+      debug(`console 'Target from chip: `(targetEO)' 10)
+      GoEO()
+
+
 
 pub ReadDayValue(day) : motor_pos
   motor_pos:=ReadBytes(day*2,2)
 
 pub WriteLookupTable(address)| i
   if address & 1
-    'pst.str(string("Invalid address"))
+    debug(`console 'Invalid address bud' 10)
   else
     repeat i from 0 to 365
       WriteEnable()
@@ -96,7 +120,7 @@ pub GoHome() | x
 
   waitms(1000)
 
-pub GoEO(targetEO)
+pub GoEO()
   repeat 5
     if rdpin(EOEncoder)==targetEO
       return
@@ -114,6 +138,7 @@ pub GoEO(targetEO)
   wypin(EOCW,0)
   wypin(EOCCW,0)
   waitus(50)
+  GoEarthMotor:=False
 
 
 PUB ReadAndWriteTest() | address, value, i

@@ -39,12 +39,12 @@ pub Main()
   cogspin(4,AxialCorMotor(),@Stack4)       'Start the earth's axial correction motor
 
   repeat
-    debug(`term1 '`(positionMO)' 10)           'Display current rotary position on the debug terminal (10 = new line)
+    'debug(`term1 '`(positionMO)' 10)           'Display current rotary position on the debug terminal (10 = new line)
     debug(`term2 '`(positionER)' 10)
-    debug(`term3 '`(positionC)' 10)
-    debug(`console 'targetMO:`(targetMO)' 10)
+    'debug(`term3 '`(positionC)' 10)
+    'debug(`console 'targetMO:`(targetMO)' 10)
     debug(`console 'targetER:`(targetER)' 10)
-    debug(`console 'targetC:`(targetC)' 10)
+    'debug(`console 'targetC:`(targetC)' 10)
 
     waitms(200)
 
@@ -167,22 +167,23 @@ pub EarthRotMotor() | x
     GoER()
     waitms(1000)
 
-pub GoER() | tolerance
-  tolerance:=50
+pub GoER() | tolerance, duty_cycle
+  tolerance:=0
+  duty_cycle:=400
 
   repeat 5
     if rdpin(ER_Encoder)==targetER
       return
     elseif rdpin(ER_Encoder)<targetER
       wypin(ER_CW,0)
-      wypin(ER_CCW,300)
+      wypin(ER_CCW,duty_cycle)
       repeat until rdpin(ER_Encoder)>=(targetER - tolerance)
-        wypin(ER_CCW,(50#> abs(rdpin(ER_Encoder)-targetER)*p_gain <#300))
+        wypin(ER_CCW,(200#> abs(rdpin(ER_Encoder)-targetER)*p_gain <#duty_cycle))
     elseif rdpin(ER_Encoder)>targetER
       wypin(ER_CCW,0)
-      wypin(ER_CW,300)
+      wypin(ER_CW,duty_cycle)
       repeat until rdpin(ER_Encoder)<=(targetER + tolerance)
-        wypin(ER_CW,(50#> abs(rdpin(ER_Encoder)-targetER)*p_gain <#300))
+        wypin(ER_CW,(200#> abs(rdpin(ER_Encoder)-targetER)*p_gain <#duty_cycle))
   'Stop Motor
   wypin(ER_CW,0)
   wypin(ER_CCW,0)
@@ -208,22 +209,23 @@ pub AxialCorMotor() | x
     GoC()
     waitms(1000)
 
-pub GoC() | tolerance
-  tolerance:=20
+pub GoC() | tolerance, duty_cycle
+  tolerance:=10
+  duty_cycle:=400
 
   repeat 5
     if rdpin(C_Encoder)==targetC
       return
     elseif rdpin(C_Encoder)<targetC
       wypin(C_CW,0)
-      wypin(C_CCW,300)
+      wypin(C_CCW,duty_cycle)
       repeat until rdpin(C_Encoder)>=(targetC - tolerance)
-        wypin(C_CCW,(50#> abs(rdpin(C_Encoder)-targetC)*p_gain <#300))
+        wypin(C_CCW,(250#> abs(rdpin(C_Encoder)-targetC)*p_gain <#duty_cycle))
     elseif rdpin(C_Encoder)>targetC
       wypin(C_CCW,0)
-      wypin(C_CW,300)
+      wypin(C_CW,duty_cycle)
       repeat until rdpin(C_Encoder)<=(targetC + tolerance)
-        wypin(C_CW,(50#> abs(rdpin(C_Encoder)-targetC)*p_gain <#300))
+        wypin(C_CW,(250#> abs(rdpin(C_Encoder)-targetC)*p_gain <#duty_cycle))
   'Stop Motor
   wypin(C_CW,0)
   wypin(C_CCW,0)

@@ -1,0 +1,230 @@
+con
+
+  _clkfreq = 300_000_000      'System clock set at 300 MHz
+
+  MO_CCW = 17       'Moon Orbit Counter Clockwise PWM signal
+  MO_CW = 16        'Moon Orbit Clockwise PWM signal
+  MO_Encoder = 8
+  MO_ProxSensor = 14
+
+  ER_CCW = 19       'Earth Rotation Counter Clockwise PWM signal
+  ER_CW = 18        'Earth Rotation Clockwise PWM signal
+  ER_Encoder = 10
+  ER_ProxSensor = 14
+
+  C_CCW = 21
+  C_CW = 20
+  C_Encoder = 12
+  C_ProxSensor = 14
+
+  p_gain = 20
+
+var
+
+  long targetMO, targetER, targetC, positionMO, positionER, positionC
+  long Stack1[100], Stack2[100], Stack3[100], Stack4[100], Stack5[100], Stack6[100], Stack7[100]
+
+pub Main()
+
+  GoHome()
+
+  debug(`term term1 size 10 4 textsize 42 color blue)                           'Set up a debug terminal window for Moon Orbit Position
+  debug(`term term2 pos 400 0 size 10 4 textsize 42 color red)                  'Set up a debug terminal window for Earth Rotation Position
+  debug(`term term3 pos 0 400 size 10 4 textsize 42 color green)                'Set up a debug terminal window for Earth Axial Correction Position
+  debug(`term console pos 800 0 size 40 16 textsize 15 color white)
+
+  cogspin(1,Encoder(),@Stack1)
+  cogspin(2,MoonOrbitMotor(),@Stack2)      'Start the moon orbit motor
+  cogspin(3,EarthRotMotor(),@Stack3)       'Start the earth rotation motor
+  cogspin(4,AxialCorMotor(),@Stack4)       'Start the earth's axial correction motor
+
+  repeat
+    debug(`term1 '`(positionMO)' 10)           'Display current rotary position on the debug terminal (10 = new line)
+    debug(`term2 '`(positionER)' 10)
+    debug(`term3 '`(positionC)' 10)
+    debug(`console 'targetMO:`(targetMO)' 10)
+    debug(`console 'targetER:`(targetER)' 10)
+    debug(`console 'targetC:`(targetC)' 10)
+
+    waitms(200)
+
+pub GoHome() | x
+
+  'Set upper and lower words of Xval so smartpins will output 30kHz PWM signals
+  x.word[0] := 10     'Set base period's # of clock pulses 10*3.33ns=33ns
+  x.word[1] := 1000   'Set PMW frame period to be made up of 1000 base periods
+
+  pinstart(MO_CW, p_oe+p_pwm_sawtooth, x, 0)        'Start PWM signals
+  pinstart(MO_CCW, p_oe+p_pwm_sawtooth, x, 0)
+  pinstart(ER_CW, p_oe+p_pwm_sawtooth, x, 0)
+  pinstart(ER_CCW, p_oe+p_pwm_sawtooth, x, 0)
+  pinstart(C_CW, p_oe+p_pwm_sawtooth, x, 0)
+  pinstart(C_CCW, p_oe+p_pwm_sawtooth, x, 0)
+
+ { repeat until ina.[MO_ProxSensor]==0
+    'wypin(MO_CW,0)
+    wypin(MO_CCW,300)
+    'wypin(ER_CW,0)
+    wypin(ER_CCW,300)
+    'wypin(C_CW,0)
+    wypin(C_CCW,300)}
+
+ { repeat until ina.[ER_ProxSensor]==0
+    wypin(ER_CW,0)
+    wypin(ER_CCW,300)
+
+  repeat until ina.[C_ProxSensor]==0
+    wypin(C_CW,0)
+    wypin(C_CCW,300)     }
+
+  'Stop Motors
+  wypin(MO_CW,0)
+  wypin(MO_CCW,0)
+  wypin(ER_CW,0)
+  wypin(ER_CCW,0)
+  wypin(C_CW,0)
+  wypin(C_CCW,0)
+
+  waitms(1000)
+
+PUB Encoder()
+
+  'Start quadrature encoder smartpin reader watching Pin 4 (Apin=%0000) and Pin 5 (Bpin=%0001) for Moon Orbit
+  pinstart(MO_Encoder, p_quadrature + %0000<<28 + %1001<<24, 0, 0)
+
+  'Start quadrature encoder smartpin reader watching Pin 6 (Apin=%0000) and Pin 7 (Bpin=%0001) for Earth Rotation
+  pinstart(ER_Encoder, p_quadrature + %0000<<28 + %1001<<24, 0, 0)
+
+  'Start quadrature encoder smartpin reader watching Pin 6 (Apin=%0000) and Pin 7 (Bpin=%0001) for Earth Rotation
+  pinstart(C_Encoder, p_quadrature + %0000<<28 + %1001<<24, 0, 0)
+
+  repeat
+    positionMO:=rdpin(MO_Encoder) 'Moon                    'Read quadrature encoder's overall count that's automatically being stored in the smartpin
+                                                        'For 25D Pololu metal gearmotor, counts per revolution (CPR) of quadrature encoder = gear ratio * 48
+    positionER:=rdpin(ER_Encoder) 'Earth Rotation
+
+    positionC:=rdpin(C_Encoder) 'Axial Correction Rotation
+
+pub MoonOrbitMotor() | x
+
+  'Set upper and lower words of Xval so smartpins will output 30kHz PWM signals
+  x.word[0] := 10     'Set base period's # of clock pulses 10*3.33ns=33ns
+  x.word[1] := 1000   'Set PMW frame period to be made up of 1000 base periods
+
+  pinstart(MO_CW, p_oe+p_pwm_sawtooth, x, 0)     'Start PWM signals
+  pinstart(MO_CCW, p_oe+p_pwm_sawtooth, x, 0)
+
+  repeat
+    targetMO:=900
+    GoMO()
+    waitms(1000)
+    targetMO:=0
+    GoMO()
+    waitms(1000)
+    targetMO:=-900
+    GoMO()
+    waitms(1000)
+
+pub GoMO() | tolerance
+  tolerance:=20
+
+  repeat 5
+    if rdpin(MO_Encoder)==targetMO
+      return
+    elseif rdpin(MO_Encoder)<targetMO
+      wypin(MO_CW,0)
+      wypin(MO_CCW,300)
+      repeat until rdpin(MO_Encoder)>=(targetMO - tolerance)
+        wypin(MO_CCW,(50#> abs(rdpin(MO_Encoder)-targetMO)*p_gain <#300))
+    elseif rdpin(MO_Encoder)>targetMO
+      wypin(MO_CCW,0)
+      wypin(MO_CW,300)
+      repeat until rdpin(MO_Encoder)<=(targetMO + tolerance)
+        wypin(MO_CW,(50#> abs(rdpin(MO_Encoder)-targetMO)*p_gain <#300))
+
+  'Stop Motor
+  wypin(MO_CW,0)
+  wypin(MO_CCW,0)
+  waitus(50)
+
+pub EarthRotMotor() | x
+
+  'Set upper and lower words of Xval so smartpins will output 30kHz PWM signals
+  x.word[0] := 10     'Set base period's # of clock pulses 10*3.33ns=33ns
+  x.word[1] := 1000   'Set PMW frame period to be made up of 1000 base periods
+
+  pinstart(ER_CW, p_oe+p_pwm_sawtooth, x, 0)        'Start PWM signals
+  pinstart(ER_CCW, p_oe+p_pwm_sawtooth, x, 0)
+
+  repeat
+    targetER:=900
+    GoER()
+    waitms(1000)
+    targetER:=0
+    GoER()
+    waitms(1000)
+    targetER:=-900
+    GoER()
+    waitms(1000)
+
+pub GoER() | tolerance
+  tolerance:=50
+
+  repeat 5
+    if rdpin(ER_Encoder)==targetER
+      return
+    elseif rdpin(ER_Encoder)<targetER
+      wypin(ER_CW,0)
+      wypin(ER_CCW,300)
+      repeat until rdpin(ER_Encoder)>=(targetER - tolerance)
+        wypin(ER_CCW,(50#> abs(rdpin(ER_Encoder)-targetER)*p_gain <#300))
+    elseif rdpin(ER_Encoder)>targetER
+      wypin(ER_CCW,0)
+      wypin(ER_CW,300)
+      repeat until rdpin(ER_Encoder)<=(targetER + tolerance)
+        wypin(ER_CW,(50#> abs(rdpin(ER_Encoder)-targetER)*p_gain <#300))
+  'Stop Motor
+  wypin(ER_CW,0)
+  wypin(ER_CCW,0)
+  waitus(50)
+
+pub AxialCorMotor() | x
+
+  'Set upper and lower words of Xval so smartpins will output 30kHz PWM signals
+  x.word[0] := 10     'Set base period's # of clock pulses 10*3.33ns=33ns
+  x.word[1] := 1000   'Set PMW frame period to be made up of 1000 base periods
+
+  pinstart(C_CW, p_oe+p_pwm_sawtooth, x, 0)     'Start PWM signals
+  pinstart(C_CCW, p_oe+p_pwm_sawtooth, x, 0)
+
+  repeat
+    targetC:=900
+    GoC()
+    waitms(1000)
+    targetC:=0
+    GoC()
+    waitms(1000)
+    targetC:=-900
+    GoC()
+    waitms(1000)
+
+pub GoC() | tolerance
+  tolerance:=20
+
+  repeat 5
+    if rdpin(C_Encoder)==targetC
+      return
+    elseif rdpin(C_Encoder)<targetC
+      wypin(C_CW,0)
+      wypin(C_CCW,300)
+      repeat until rdpin(C_Encoder)>=(targetC - tolerance)
+        wypin(C_CCW,(50#> abs(rdpin(C_Encoder)-targetC)*p_gain <#300))
+    elseif rdpin(C_Encoder)>targetC
+      wypin(C_CCW,0)
+      wypin(C_CW,300)
+      repeat until rdpin(C_Encoder)<=(targetC + tolerance)
+        wypin(C_CW,(50#> abs(rdpin(C_Encoder)-targetC)*p_gain <#300))
+  'Stop Motor
+  wypin(C_CW,0)
+  wypin(C_CCW,0)
+  waitus(50)

@@ -28,21 +28,17 @@ PUB Main() | x
   debug(`term EO size 40 10 pos 500 100 textsize 12 color white)
   debug(`term DayKnob size 40 10 pos 900 100 textsize 12 color white)
 
-  dira.[Sout]~~
-  dira.[clk]~~
-  dira.[Sin]~
-  dira.[cs]~~
 
   debug(`console 'starting homing' 10)
   GoHome()
   debug(`console 'done homing' 10)
 
-  'debug(`console 'Val from cog 0: `(ReadBytes(300, 2))' 10)
   cogspin(1, Encoders(),@Stack1)
   cogspin(2, RunEarthMotor(), @Stack2)
   repeat
     debug(`EO '`(positionEO)' 10)
     debug(`DayKnob '`(positionDK)' 10)
+    'debug(`console 'Target EO: `(targetEO)' 10)
     waitms(200)
 
 
@@ -67,7 +63,10 @@ PUB Encoders() | revs
       'Uncomment to make button press reset knob encoder value
       'dira.[DayKnobEncoder]~
       'dira.[DayKnobEncoder]~~
-    waitms(10)
+    else
+      GoEarthMotor:=False
+
+    waitms(1)
 
 
 PUB RunEarthMotor() | address
@@ -76,13 +75,15 @@ PUB RunEarthMotor() | address
   dira.[Sin]~
   dira.[cs]~~
 
-  debug(`console 'Val from cog 3: `(ReadBytes(300, 2))' 10)
+
   repeat
+    waitms(10)
     if GoEarthMotor
       address:=2*positionDK
       targetEO:=ReadBytes(address, 2)
       debug(`console 'Target from chip: `(targetEO)' 10)
       GoEO()
+
 
 
 
@@ -120,25 +121,26 @@ pub GoHome() | x
 
   waitms(1000)
 
-pub GoEO()
+pub GoEO() | tolerance
+  tolerance:=20
   repeat 5
     if rdpin(EOEncoder)==targetEO
       return
     elseif rdpin(EOEncoder)<targetEO
       wypin(EOCW,0)
       wypin(EOCCW,1000)
-      repeat until rdpin(EOEncoder)>=targetEO
+      repeat until rdpin(EOEncoder)>=(targetEO - tolerance)
         wypin(EOCCW,(50#> abs(rdpin(EOEncoder)-targetEO)*p_gain <#1000))
     elseif rdpin(EOEncoder)>targetEO
       wypin(EOCCW,0)
       wypin(EOCW,1000)
-      repeat until rdpin(EOEncoder)<=targetEO
+      repeat until rdpin(EOEncoder)<=(targetEO + tolerance)
         wypin(EOCW,(50#> abs(rdpin(EOEncoder)-targetEO)*p_gain <#1000))
   'Stop Motor
   wypin(EOCW,0)
   wypin(EOCCW,0)
   waitus(50)
-  GoEarthMotor:=False
+
 
 
 PUB ReadAndWriteTest() | address, value, i

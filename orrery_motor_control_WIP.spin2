@@ -19,6 +19,11 @@ con
 
   p_gain = 20
 
+  DI_slave=56
+  CLK_slave=58
+  DO_slave=60
+  CS_slave=62
+
 var
 
   long targetMO, targetER, targetC, positionMO, positionER, positionC

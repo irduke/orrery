@@ -18,10 +18,10 @@ CON
   DayKnobButton = 20
 
   'P2-P2 SPI
-  DO_master=56
+  DO_master=0
   CLK_master=58
   DI_master=60
-  CS_master=62
+  CS_master=25
 
 VAR
   long DutyCycle, position, index, MemAddress, positionEO, positionDK, targetEO, GoEarthMotor
@@ -29,13 +29,24 @@ VAR
   byte data[512]
 
 PUB Main() | x
+  debug(`term console size 40 10 pos 100 100 textsize 12 color white)
+  dira.[CS_master]~
+  dira.[DO_master]~~
+  dira.[CLK_master]~~
+  dira.[DI_master]~
 
-  dira.[Sout]~~
-  dira.[clk]~~
-  dira.[Sin]~
-  dira.[cs]~~
+  waitms(3000)
+  dira.[CS_master]~~
 
-  {debug(`term console size 40 10 pos 100 100 textsize 12 color white)
+
+  debug(`console 'Sending Data' 10)
+  SendBytesToP2(10, 1)
+  debug(`console 'Done' 10)
+  dira.[CS_master]~
+  repeat
+
+
+  {
   debug(`term EO size 40 10 pos 500 100 textsize 12 color white)
   debug(`term DayKnob size 40 10 pos 900 100 textsize 12 color white)
 
@@ -209,7 +220,7 @@ PUB EraseChip()
   debug(`console 'Erasing chip' 10)
   WriteEnable()                'Allow chip to be changed
   outa.[cs]~                  'Set the chip select pin Low (activate chip)
-  SendBytes($C7, 1)
+  SendBytesToChip($C7, 1)
   outa.[cs]~~                 'Deactivate serial interface
   WaitUntilNotBusy()           'Wait until entire chip is erased (~20 seconds)
   debug(`console 'Chip Erased' 10)
@@ -217,7 +228,7 @@ PUB EraseChip()
 PUB EraseSector(address)
   WriteEnable()                'Allow chip to be changed
   outa.[cs]~                  'Set the chip select pin Low (activate chip)
-  SendBytes($20, 1)
+  SendBytesToChip($20, 1)
   SendThreeBytes(address)    'Send 24-bit address
   outa.[cs]~~                 'Deactivate serial interface
   WaitUntilNotBusy()           'Wait until entire chip is erased (~20 seconds)
@@ -227,7 +238,7 @@ PUB EraseSector(address)
 PUB Erase32kBlock(address)
   WriteEnable()                'Allow chip to be changed
   outa.[cs]~                  'Set the chip select pin Low (activate chip)
-  SendBytes($52, 1)
+  SendBytesToChip($52, 1)
   SendThreeBytes(address)    'Send 24-bit address
   outa.[cs]~~                 'Deactivate serial interface
   WaitUntilNotBusy()           'Wait for block to be erased
@@ -237,7 +248,7 @@ PUB Erase32kBlock(address)
 PUB Erase64kBlock(address)
   WriteEnable()                'Allow chip to be changed
   outa.[cs]~                  'Set the chip select pin Low (activate chip)
-  SendBytes($D8, 1)
+  SendBytesToChip($D8, 1)
   SendThreeBytes(address)    'Send 24-bit address
   outa.[cs]~~                 'Deactivate serial interface
   WaitUntilNotBusy()           'Wait for block to be erased
@@ -248,37 +259,37 @@ PUB WaitUntilNotBusy() | busybit
   busybit:=1
   repeat until busybit==0
     outa.[cs]~                  'Set the chip select pin Low (activate chip)
-    SendBytes($05, 1)
+    SendBytesToChip($05, 1)
     busybit:=ReceiveByte()
     outa.[cs]~~                 'Deactivate serial interface
     busybit:=busybit & 1   'lop off all but LSB (the "busy" status bit)
 
 PUB SendOneByte(databyte)
   outa.[cs]~                  'Set the chip select pin Low (activate chip)
-  SendBytes(databyte, 1)
+  SendBytesToChip(databyte, 1)
   outa.[cs]~~                 'Deactivate serial interface
   waitms(10)
 
 PUB WriteOneByte(address,databyte)
   outa.[cs]~                  'Set the chip select pin Low (activate chip)
-  SendBytes($02, 1)           'Send $02=PageProgram command
+  SendBytesToChip($02, 1)           'Send $02=PageProgram command
   SendThreeBytes(address)    'Send 24-bit address
-  SendBytes(databyte, 1)      'Send byte of data to write at this address
+  SendBytesToChip(databyte, 1)      'Send byte of data to write at this address
   outa.[cs]~~
 
 PUB WriteBytes(address,data_bytes, num_bytes)
   'WARNING: DOES NOT ACCOUNT FOR PAGE FAULTS, MUST DO SO MANUALLY
   'Pages are 256 bytes and writing across a page fault will result in overwriting data
   outa.[cs]~
-  SendBytes($02, 1)
+  SendBytesToChip($02, 1)
   SendThreeBytes(address)
-  SendBytes(data_bytes, num_bytes)
+  SendBytesToChip(data_bytes, num_bytes)
   outa.[cs]~~
 
 PUB StartPageWrite(address)
   WriteEnable()
   outa.[cs]~                  'Set the chip select pin Low (activate chip)
-  SendBytes($02, 1)          'Send $02=PageProgram command
+  SendBytesToChip($02, 1)          'Send $02=PageProgram command
   address:=address & $FF_FF_00    ' lop off last byte to avoid overflow/overwritting
   SendThreeBytes(address)    'Send 24-bit address
 
@@ -287,7 +298,7 @@ PUB StopPageWrite()
 
 PUB StartPageRead(address)
   outa.[cs]~                  'Set the chip select pin Low (activate chip)
-  SendBytes($03, 1)          'Send $03=ReadData command
+  SendBytesToChip($03, 1)          'Send $03=ReadData command
   SendThreeBytes(address)    'Send 24-bit address
 
 PUB StopPageRead()
@@ -295,7 +306,7 @@ PUB StopPageRead()
 
 PUB CopyPage(StartAddress,ArrayAddress) | i      'Copy page from chip into an 256 byte array of data
   outa.[cs]~                  'Set the chip select pin Low (activate chip)
-  SendBytes($03, 1)          'Send $03=ReadData command
+  SendBytesToChip($03, 1)          'Send $03=ReadData command
   StartAddress:=StartAddress & $FF_FF_00    ' lop off last byte in case given address is not a multiple of 256
   SendThreeBytes(StartAddress)    'Send 24-bit address
   repeat i from 0 to 255
@@ -304,7 +315,7 @@ PUB CopyPage(StartAddress,ArrayAddress) | i      'Copy page from chip into an 25
 
 PUB ReadOneByte(address) : databyte
   outa.[cs]~                  'Set the chip select pin Low (activate chip)
-  SendBytes($03, 1)          'Send $03=ReadData command
+  SendBytesToChip($03, 1)          'Send $03=ReadData command
   SendThreeBytes(address)
   databyte:=ReceiveByte()
   outa.[cs]~~
@@ -312,17 +323,25 @@ PUB ReadOneByte(address) : databyte
 PUB ReadBytes(address, num_bytes) : datastream
   'Sends data read command and then reads in specified number of bytes
   outa.[cs]~
-  SendBytes($03, 1)
+  SendBytesToChip($03, 1)
   SendThreeBytes(address)
   datastream:=ReceiveBytes(num_bytes)
   outa.[cs]~~
 
 
-PRI SendBytes(data_bytes, num_bytes) | i
+PRI SendBytesToChip(data_bytes, num_bytes) | i
   repeat i from (num_bytes*8-1) to 0
     outa.[Sout]:=data_bytes>>i
     outa.[clk]~~              'Input data sampled on rising edge
     outa.[clk]~
+
+PRI SendBytesToP2(data_bytes, num_bytes) | i
+  repeat i from (num_bytes*8-1) to 0
+    outa.[DO_master]:=data_bytes>>i
+    outa.[CLK_master]~~
+    waitms(10)
+    outa.[CLK_master]~
+    waitms(10)
 
 PRI SendThreeBytes(databytes) | i
   repeat i from 23 to 0

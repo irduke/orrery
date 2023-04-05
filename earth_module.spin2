@@ -9,13 +9,19 @@ CON
 
   p_gain = 10
 
-  Sout=19                     'P9 sends serial data out to memory chip's Digital In (DI) pin
-  clk=20                      'P10 sends synchronous clock pulses to memory chip
-  Sin=22                      'P12 receives serial data sent from memory chip's Digital Out (DO) pin
-  cs=23                       'P13 controls the Chip Select pin to activate the memory chip
+  Sout=28                     'P9 sends serial data out to memory chip's Digital In (DI) pin
+  clk=29                      'P10 sends synchronous clock pulses to memory chip
+  Sin=26                      'P12 receives serial data sent from memory chip's Digital Out (DO) pin
+  cs=27                       'P13 controls the Chip Select pin to activate the memory chip
 
-  DayKnobEncoder = 14
-  DayKnobButton = 13
+  DayKnobEncoder = 16
+  DayKnobButton = 20
+
+  'P2-P2 SPI
+  DO_master=56
+  CLK_master=58
+  DI_master=60
+  CS_master=62
 
 VAR
   long DutyCycle, position, index, MemAddress, positionEO, positionDK, targetEO, GoEarthMotor
@@ -24,10 +30,14 @@ VAR
 
 PUB Main() | x
 
-  debug(`term console size 40 10 pos 100 100 textsize 12 color white)
+  dira.[Sout]~~
+  dira.[clk]~~
+  dira.[Sin]~
+  dira.[cs]~~
+
+  {debug(`term console size 40 10 pos 100 100 textsize 12 color white)
   debug(`term EO size 40 10 pos 500 100 textsize 12 color white)
   debug(`term DayKnob size 40 10 pos 900 100 textsize 12 color white)
-
 
   debug(`console 'starting homing' 10)
   GoHome()
@@ -38,9 +48,8 @@ PUB Main() | x
   repeat
     debug(`EO '`(positionEO)' 10)
     debug(`DayKnob '`(positionDK)' 10)
-    'debug(`console 'Target EO: `(targetEO)' 10)
-    waitms(200)
-
+    'debug(`console 'Target EO: `(GoEarthMotor)' 10)
+    waitms(200)}
 
 
 PUB Encoders() | revs
@@ -66,7 +75,7 @@ PUB Encoders() | revs
     else
       GoEarthMotor:=False
 
-    waitms(1)
+    waitms(10)
 
 
 PUB RunEarthMotor() | address
@@ -74,7 +83,7 @@ PUB RunEarthMotor() | address
   dira.[clk]~~
   dira.[Sin]~
   dira.[cs]~~
-
+  waitms(2000)
 
   repeat
     waitms(10)
@@ -83,9 +92,6 @@ PUB RunEarthMotor() | address
       targetEO:=ReadBytes(address, 2)
       debug(`console 'Target from chip: `(targetEO)' 10)
       GoEO()
-
-
-
 
 pub ReadDayValue(day) : motor_pos
   motor_pos:=ReadBytes(day*2,2)

@@ -230,3 +230,48 @@ pub GoC() | tolerance, duty_cycle
   wypin(C_CW,0)
   wypin(C_CCW,0)
   waitus(50)
+
+
+{ DATA TRANSFER SECTION }
+
+PUB ReadOneByte(address) : databyte
+  outa.[cs]~                  'Set the chip select pin Low (activate chip)
+  SendBytes($03, 1)          'Send $03=ReadData command
+  SendThreeBytes(address)
+  databyte:=ReceiveByte()
+  outa.[cs]~~
+
+PUB ReadBytes(address, num_bytes) : datastream
+  'Sends data read command and then reads in specified number of bytes
+  outa.[cs]~
+  SendBytes($03, 1)
+  SendThreeBytes(address)
+  datastream:=ReceiveBytes(num_bytes)
+  outa.[cs]~~
+
+
+PRI SendBytes(data_bytes, num_bytes) | i
+  repeat i from (num_bytes*8-1) to 0
+    outa.[Sout]:=data_bytes>>i
+    outa.[clk]~~              'Input data sampled on rising edge
+    outa.[clk]~
+
+PRI SendThreeBytes(databytes) | i
+  repeat i from 23 to 0
+    outa.[Sout]:=databytes>>i
+    outa.[clk]~~              'Input data sampled on rising edge
+    outa.[clk]~
+
+PRI ReceiveByte() : databyte
+  databyte~
+  repeat 8
+    databyte:=databyte<<1+ina.[Sin]
+    outa.[clk]~~              'Input data sampled on rising edge
+    outa.[clk]~
+
+PRI ReceiveBytes(num_bytes) : datastream
+  datastream~
+  repeat 8*num_bytes
+    datastream:=datastream<<1+ina.[Sin]
+    outa.[clk]~~
+    outa.[clk]~

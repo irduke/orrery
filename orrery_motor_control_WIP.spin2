@@ -19,27 +19,33 @@ con
 
   p_gain = 20
 
-  DI_slave=0
-  CLK_slave=58
-  DO_slave=60
-  CS_slave=56
+  DI_slave=57
+  CLK_slave=59
+  DO_slave=61 'it do not matter
+  CS_slave=63
 
 var
 
   long targetMO, targetER, targetC, positionMO, positionER, positionC
   long Stack1[100], Stack2[100], Stack3[100], Stack4[100], Stack5[100], Stack6[100], Stack7[100]
 
-pub Main() | output
-
+pub Main() | output , x
+  dira.[CS_slave]~
   debug(`term console pos 800 0 size 40 16 textsize 15 color white)
-  debug(`console 'waiting' 10)
-  repeat until ina.[CS_slave]==1
-    debug(`console '`(ina.[CS_slave])' 10)
-  debug(`console 'out of loop' 10)
-  output:=ReceiveBytes(1)
-  debug(`console '`(output)' 10)
 
+  'Controller P2 needs time to set up outputs
+  debug(`console 'Waiting' 10)
+  repeat 0
+    waitms(5000)
+
+  debug(`console 'loop started' 10)
+  repeat until inb.[CS_slave-32]==1
+    'nuffink
+
+  debug(`console 'out of loop' 10)
   repeat
+  {output:=ReceiveBytes(1)
+  debug(`console '`(output)' 10)}
 
 
 
@@ -270,8 +276,6 @@ pub GoC() | tolerance, duty_cycle
 PRI ReceiveBytes(num_bytes) : datastream
   datastream~
   repeat 8*num_bytes
-    'outa.[clk]~~
     repeat until ina.[CLK_slave]==1
-    'outa.[clk]~
     datastream:=datastream<<1+ina.[DI_slave]
     repeat until ina.[CLK_slave]==0

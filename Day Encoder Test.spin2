@@ -1,0 +1,37 @@
+CON
+  _clkfreq = 300_000_000
+
+  DayKnobEncoder = 16
+  DayKnobButton = 20
+
+VAR
+  long  Stack1[100], positionDK, GoEarthMotor
+
+PUB Main() | revs
+
+  debug(`term DayKnob size 40 10 pos 900 100 textsize 12 color white)
+  debug(`term DayKnobSelect size 40 10 pos 400 100 textsize 12 color white)
+
+  'Start quadrature encoder smartpin reader watching Pin 13 (Apin=%0000) and Pin 14 (Bpin=%0001) for Earth Orbit
+  'Start Day Knob Encoder
+  pinstart(DayKnobEncoder, p_quadrature + %0000<<28 + %0001<<24, 0, 0)
+
+  repeat
+    positionDK:=rdpin(DayKnobEncoder)/4
+    if positionDK >= 0
+      positionDK:=positionDK//366
+    else
+      revs:=1+abs(positionDK/366)
+      positionDK:=(revs*366+positionDK)//366
+    debug(`DayKnob '`(positionDK)' 10)
+    if ina.[DayKnobButton]==0
+      GoEarthMotor:=True
+      'Uncomment to make button press reset knob encoder value
+      'dira.[DayKnobEncoder]~
+      'dira.[DayKnobEncoder]~~
+    else
+      GoEarthMotor:=False
+    debug(`DayKnobSelect '`(GoEarthMotor)' 10)
+
+    waitms(200)
+

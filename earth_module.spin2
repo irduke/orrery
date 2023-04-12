@@ -18,10 +18,10 @@ CON
   DayKnobButton = 20
 
   'P2-P2 SPI
-  DO_master=0
-  CLK_master=58
-  DI_master=60
-  CS_master=25
+  DO_master=57
+  CLK_master=59
+  DI_master=61 'it do not matter
+  CS_master=63
 
 VAR
   long DutyCycle, position, index, MemAddress, positionEO, positionDK, targetEO, GoEarthMotor
@@ -30,24 +30,45 @@ VAR
 
 PUB Main() | x
   debug(`term console size 40 10 pos 100 100 textsize 12 color white)
-  dira.[CS_master]~
-  dira.[DO_master]~~
-  dira.[CLK_master]~~
-  dira.[DI_master]~
 
+  dirb.[DO_master-32]~~
+  dirb.[CLK_master-32]~~
+  dirb.[DI_master-32]~
+  dirb.[CS_master-32]~~
+
+  debug(`console 'direction set' 10)
+  waitms(5000)
+
+  outb.[CS_master-32]~~
+  waitms(5000)
+  outb.[CS_master-32]~
+
+
+
+'********************************************** TESTING *********************************************
+ { debug(`console 'Setting Direction' 10)
+  dirb.[CS_master-32]~~
+  waitms(5000)
+  debug(`console 'Direction set. Begin SPI' 10)
+
+  outb.[CS_master-32]~
+  debug(`console 'output low, waiting' 10)
   waitms(3000)
-  dira.[CS_master]~~
+  outb.[CS_master-32]~~
+  debug(`console 'output high, waiting' 10)
+  waitms(3000)
+  outb.[CS_master-32]~
+  debug(`console 'output low, done' 10)
+  repeat                                      }
 
-
-  debug(`console 'Sending Data' 10)
+  {debug(`console 'Sending Data' 10)
   SendBytesToP2(10, 1)
-  debug(`console 'Done' 10)
-  dira.[CS_master]~
-  repeat
+  debug(`console 'Done' 10) }
 
 
-  {
-  debug(`term EO size 40 10 pos 500 100 textsize 12 color white)
+
+
+ { debug(`term EO size 40 10 pos 500 100 textsize 12 color white)
   debug(`term DayKnob size 40 10 pos 900 100 textsize 12 color white)
 
   debug(`console 'starting homing' 10)
@@ -60,7 +81,7 @@ PUB Main() | x
     debug(`EO '`(positionEO)' 10)
     debug(`DayKnob '`(positionDK)' 10)
     'debug(`console 'Target EO: `(GoEarthMotor)' 10)
-    waitms(200)}
+    waitms(200)     }
 
 
 PUB Encoders() | revs
@@ -337,10 +358,10 @@ PRI SendBytesToChip(data_bytes, num_bytes) | i
 
 PRI SendBytesToP2(data_bytes, num_bytes) | i
   repeat i from (num_bytes*8-1) to 0
-    outa.[DO_master]:=data_bytes>>i
-    outa.[CLK_master]~~
+    outb.[DO_master-32]:=data_bytes>>i
+    outb.[CLK_master-32]~~
     waitms(10)
-    outa.[CLK_master]~
+    outb.[CLK_master-32]~
     waitms(10)
 
 PRI SendThreeBytes(databytes) | i

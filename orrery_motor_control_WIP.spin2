@@ -19,35 +19,45 @@ con
 
   p_gain = 20
 
-  DI_slave=57
-  CLK_slave=59
-  DO_slave=61 'it do not matter
-  CS_slave=63
+  DI_slave=24
+  CLK_slave=26
+  DO_slave=28 'now it do matter
+  CS_slave=30
 
 var
 
   long targetMO, targetER, targetC, positionMO, positionER, positionC
   long Stack1[100], Stack2[100], Stack3[100], Stack4[100], Stack5[100], Stack6[100], Stack7[100]
 
-pub Main() | output , x
+pub Main() | output , x, break, in1, in2
+  dira.[DI_slave]~
+  dira.[CLK_slave]~
+  dira.[DO_slave]~~ 'Set as output for sending 'done' bit back
   dira.[CS_slave]~
+
   debug(`term console pos 800 0 size 40 16 textsize 15 color white)
 
-  'Controller P2 needs time to set up outputs
-  debug(`console 'Waiting' 10)
-  repeat 0
-    waitms(5000)
+  waitms(100)
 
   debug(`console 'loop started' 10)
-  repeat until inb.[CS_slave-32]==1
-    'nuffink
+  break:=False
+  repeat until break
+    in1:=ina.[CS_slave]
+    waitus(50)
+    in2:=ina.[CS_slave]
+    if in1 == 1 and in2 == 1
+      break:=True
+
 
   debug(`console 'out of loop' 10)
-  repeat
-  {output:=ReceiveBytes(1)
-  debug(`console '`(output)' 10)}
 
+  debug(`console 'Receiving bytes' 10)
+  output:=ReceiveBytes(2)
+  debug(`console '`(output)' 10)
 
+  outa.[DO_slave]~~
+  waitms(10)
+  outa.[DO_slave]~
 
   {GoHome()
 

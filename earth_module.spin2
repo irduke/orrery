@@ -1,7 +1,6 @@
 CON
   _clkfreq = 300_000_000
 
-
   EOCCW = 9
   EOCW = 8
   EOEncoder = 10
@@ -18,10 +17,10 @@ CON
   DayKnobButton = 20
 
   'P2-P2 SPI
-  DO_master=57
-  CLK_master=59
-  DI_master=61 'it do not matter
-  CS_master=63
+  DO_master=21
+  CLK_master=22
+  DI_master=23 'it do not matter
+  CS_master=30
 
 VAR
   long DutyCycle, position, index, MemAddress, positionEO, positionDK, targetEO, GoEarthMotor
@@ -31,17 +30,35 @@ VAR
 PUB Main() | x
   debug(`term console size 40 10 pos 100 100 textsize 12 color white)
 
-  dirb.[DO_master-32]~~
-  dirb.[CLK_master-32]~~
-  dirb.[DI_master-32]~
-  dirb.[CS_master-32]~~
+  dira.[DO_master]~~
+  dira.[CLK_master]~~
+  dira.[DI_master]~
+  dira.[CS_master]~~
 
-  debug(`console 'direction set' 10)
-  waitms(5000)
+  outa.[CS_master]~~
+  debug(`console 'High' 10)
+  waitms(100)
 
-  outb.[CS_master-32]~~
-  waitms(5000)
-  outb.[CS_master-32]~
+  dira.[Sout]~~
+  dira.[clk]~~
+  dira.[Sin]~
+  dira.[cs]~~
+  waitms(2000)
+
+  'EraseChip()
+  'WriteLookupTable(0)
+  x:=ReadBytes($0,2)
+  y:=ReadBytes($2,2)
+  z:=ReadBytes($4,2)
+  debug(`console '`(x)' 10)
+  debug(`console 'Sending Data' 10)
+  SendBytesToP2(x, 6, 50)
+  debug(`console 'Data Sent' 10)
+
+  repeat until ina.[DI_master]==1
+  debug(`console 'Acknowlegement Recieved' 10)
+  outa.[CS_master]~
+
 
 
 
@@ -356,13 +373,13 @@ PRI SendBytesToChip(data_bytes, num_bytes) | i
     outa.[clk]~~              'Input data sampled on rising edge
     outa.[clk]~
 
-PRI SendBytesToP2(data_bytes, num_bytes) | i
+PRI SendBytesToP2(data_bytes, num_bytes, delay) | i
   repeat i from (num_bytes*8-1) to 0
-    outb.[DO_master-32]:=data_bytes>>i
-    outb.[CLK_master-32]~~
-    waitms(10)
-    outb.[CLK_master-32]~
-    waitms(10)
+    outa.[DO_master]:=data_bytes>>i
+    outa.[CLK_master]~~
+    waitms(delay)
+    outa.[CLK_master]~
+    waitms(delay)
 
 PRI SendThreeBytes(databytes) | i
   repeat i from 23 to 0

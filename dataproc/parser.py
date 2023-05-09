@@ -1,14 +1,15 @@
 import csv
+import requests
 
 
 MOON_MOTOR_MULTIPLIER = (34*48*2 - 1)/360
-EARTH_MOTOR_MULTIPLIER = (34*48 - 1)/360
+EARTH_MOTOR_MULTIPLIER = (34*48 - 1)
 
 
 
 moon_positions = []
 earth_positions = []
-def write_year_range(start:int, end:int):
+def parse_year_range(start:int, end:int):
     """
     start and end are both inclusive
     """
@@ -44,9 +45,54 @@ def write_year_range(start:int, end:int):
                 earth_positions.append(str(earth_val))
 
 
-    print(f'num moon positions: {len(moon_positions)}')
-    print(f'num earth positions: {len(earth_positions)}')
+    write_data(earth_positions, moon_positions)
 
+
+def parse_nasa_horizons(start_date, end_date):
+    """
+    Grabs data from NASA Horizons db
+    Documentation: https://ssd-api.jpl.nasa.gov/doc/horizons.html
+
+    Date format: "YYYY-MM-DD HR:MIN"
+    """
+    earth_positions = []
+    moon_positions = []
+
+    req_url = f"https://ssd.jpl.nasa.gov/api/horizons.api?format=text&COMMAND='301'&MAKE_EPHEM='YES'&EPHEM_TYPE='OBSERVER'&CENTER='780@399'&START_TIME='{start_date}'&STOP_TIME='{end_date}'&STEP_SIZE='60 min'&QUANTITIES='4,7'"
+    response = requests.get(req_url).text
+
+    start = "$$SOE"
+    end = "$$EOE"
+
+    #Grabs only position data from response, L+outdated API does not have JSON response format
+    pos_data = response[response.find(start)+len(start):response.rfind(end)].split("\n")
+    pos_data = [x for x in pos_data if x]
+    for line in pos_data:
+        values = line.split(" ")
+        values = [x for x in values if x]
+        if len(values) != 7:
+            values.pop(2)
+        # year_date contains YYYY-Month-DD, elevation is excluded, and sr stands for Sidereal
+        year_date, hour, azimuth, _, sr_hour, sr_min, sr_sec = values
+
+        e_motor_pos = (int(sr_hour)*60*60 + int(sr_min)*60 + float(sr_sec)) / 86400 #number of seconds in a day
+        e_motor_pos = int(e_motor_pos * EARTH_MOTOR_MULTIPLIER)
+
+        m_motor_pos = int(float(azimuth) * MOON_MOTOR_MULTIPLIER)
+
+        earth_positions.append(str(e_motor_pos))
+        moon_positions.append(str(m_motor_pos))
+
+        
+    write_data(earth_positions, moon_positions)
+
+
+ 
+def write_data(earth_positions:list, moon_positions:list):
+    """
+    Takes list of earth and moon positions and writes to text file for copy/paste
+    Paste list into DAT section of P2 code to write to chip
+    """
 
     with open('earthdata.txt', 'w') as earthdb:
         for i, val in enumerate(earth_positions):
@@ -74,4 +120,4 @@ def write_year_range(start:int, end:int):
 
 
 if __name__ == "__main__":
-    write_year_range(2021, 2021)
+    parse_nasa_horizons("2023-01-01 00:00", "2023-12-31 23:00")
